@@ -1,0 +1,16 @@
+.DS_Store
+.env
+.env.*
+.playwright-mcp/
+.superpowers/
+*.log
+dist/
+node_modules/
+assets/media/*.webm
+.serena/
+
+# Private working notes (kept locally, never published)
+CLAUDE.md
+HANDOFF.md
+docs/launch/
+docs/superpowers/

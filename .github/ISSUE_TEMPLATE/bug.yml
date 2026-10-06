@@ -1,0 +1,26 @@
+name: Bug report
+description: Something in the dungeon looks or works wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you see? A screenshot helps a lot.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      placeholder: |
+        1. Run `npx github:dbl8005/repos-and-dungeons` in a repo with ~N files
+        2. Start a Claude Code session and …
+  - type: input
+    id: env
+    attributes:
+      label: OS, browser, Node version
+      placeholder: macOS 15, Chrome 140, Node 22
+  - type: markdown
+    attributes:
+      value: "Please don't paste transcript contents — they can contain secrets."

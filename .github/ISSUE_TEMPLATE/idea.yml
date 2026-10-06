@@ -1,0 +1,11 @@
+name: Idea for the dungeon
+description: A new monster, class, effect, agent or feature
+labels: [idea]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What should happen in the dungeon, and what agent activity triggers it?
+    validations:
+      required: true

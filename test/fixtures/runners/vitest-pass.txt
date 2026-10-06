@@ -1,0 +1,5 @@
+ ✓ src/auth.test.ts (4 tests) 12ms
+ ✓ src/utils.test.ts (3 tests) 4ms
+
+ Test Files  2 passed (2)
+      Tests  7 passed (7)

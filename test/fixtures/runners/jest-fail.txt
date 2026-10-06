@@ -1,0 +1,8 @@
+FAIL src/math.test.js
+  ● math › adds
+
+    expect(received).toBe(expected)
+
+PASS src/str.test.js
+
+Tests:       1 failed, 6 passed, 7 total

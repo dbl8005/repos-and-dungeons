@@ -1,0 +1,17 @@
+ RUN  v3.2.4 /repo
+
+ ✓ src/utils.test.ts (3 tests) 4ms
+ ❯ src/auth.test.ts (4 tests | 2 failed) 12ms
+   × token > expires 5ms
+   × token > refreshes 2ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/auth.test.ts > token > expires
+AssertionError: expected true to be false
+ FAIL  src/auth.test.ts > token > refreshes
+AssertionError: expected 1 to be 2
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 5 passed (7)
+   Duration  320ms

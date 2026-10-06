@@ -1,0 +1,5 @@
+--- FAIL: TestX (0.00s)
+    x_test.go:9: want 2 got 1
+FAIL
+FAIL	example.com/pkg	0.004s
+ok  	example.com/other	0.002s

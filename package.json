@@ -1,0 +1,55 @@
+{
+  "name": "repos-and-dungeons",
+  "version": "0.1.0",
+  "description": "Your coding agent's session as a roguelike: your repo is the dungeon, the agent is the hero, failing tests are monsters.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "repos-and-dungeons": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "build": "tsc -p tsconfig.build.json && vite build",
+    "dev:web": "vite",
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "RD_E2E=1 vitest run",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
+    "gifenc": "^1.0.3",
+    "ignore": "^7.0.12",
+    "open": "^11.0.4",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/ws": "^8.18.2",
+    "pixi.js": "^8.22.0",
+    "playwright": "^1.63.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "ai-agents",
+    "roguelike",
+    "pixel-art",
+    "visualization",
+    "developer-tools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dbl8005/repos-and-dungeons.git"
+  },
+  "homepage": "https://github.com/dbl8005/repos-and-dungeons"
+}
