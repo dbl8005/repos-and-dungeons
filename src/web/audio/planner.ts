@@ -1,13 +1,22 @@
 import type { GameEvent, HeroId } from '../../shared/events.js';
 import { fnv1a32 } from '../../shared/hash.js';
+import type { Monster } from '../../shared/reducer.js';
 
 export type CueName = 'step' | 'page' | 'whoosh' | 'anvil' | 'sparkle' | 'shimmer' | 'squelch' | 'hit' | 'coins' | 'chains' | 'creak' | 'horn' | 'blip' | 'wind' | 'victory';
 export type SoundCue = { name: CueName; pitch?: number };
-export type PlanContext = { followed: HeroId | null; now: number; monstersBefore: number; monstersAfter: number };
+/** Monster lists from before and after the batch was applied (the reducer replaces monsters, never mutates them). */
+export type PlanContext = { followed: HeroId | null; now: number; monstersBefore: Monster[]; monstersAfter: Monster[] };
+
+/** Whether some monster lost hp (or died), and whether some monster died. */
+function damage(before: Monster[], after: Monster[]): { hit: boolean; died: boolean } {
+  const now = new Map(after.map((m) => [m.id, m.hp]));
+  return { hit: before.some((m) => (now.get(m.id) ?? 0) < m.hp), died: before.some((m) => !now.has(m.id)) };
+}
 
 /** Which sounds a batch of events makes (spec §11). Pure; the engine plays them. */
 export function planSounds(events: GameEvent[], ctx: PlanContext): SoundCue[] {
   const cues: SoundCue[] = [];
+  let { hit, died } = damage(ctx.monstersBefore, ctx.monstersAfter);
   for (const e of events) {
     switch (e.kind) {
       case 'move':
@@ -22,7 +31,10 @@ export function planSounds(events: GameEvent[], ctx: PlanContext): SoundCue[] {
       case 'cast': cues.push({ name: 'shimmer' }); break;
       case 'test_result':
         if (e.failed.length) cues.push({ name: 'squelch' });
-        else if (ctx.monstersBefore > 0) cues.push({ name: 'hit' }, { name: 'coins' });
+        if (hit) cues.push({ name: 'hit' });
+        hit = false;
+        if (!e.failed.length && died) cues.push({ name: 'coins' });
+        if (!e.failed.length) died = false;
         break;
       case 'door_locked': cues.push({ name: 'chains' }); break;
       case 'door_opened': cues.push({ name: 'creak' }); break;
@@ -31,7 +43,7 @@ export function planSounds(events: GameEvent[], ctx: PlanContext): SoundCue[] {
       case 'speech': cues.push({ name: 'blip', pitch: 0.8 + (fnv1a32(e.hero) % 50) / 100 }); break;
     }
   }
-  if (ctx.monstersBefore > 0 && ctx.monstersAfter === 0) cues.push({ name: 'victory' });
+  if (ctx.monstersBefore.length > 0 && ctx.monstersAfter.length === 0) cues.push({ name: 'victory' });
   return cues;
 }
 

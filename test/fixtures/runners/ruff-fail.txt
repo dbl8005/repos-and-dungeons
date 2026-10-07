@@ -1,0 +1,5 @@
+app/models.py:1:8: F401 [*] `os` imported but unused
+app/models.py:14:89: E501 Line too long (102 > 88)
+app/views.py:3:1: E402 Module level import not at top of file
+Found 3 errors.
+[*] 1 fixable with the `--fix` option.

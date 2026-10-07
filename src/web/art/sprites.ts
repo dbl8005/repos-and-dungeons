@@ -1,16 +1,29 @@
+import type { Species } from '../../shared/bestiary.js';
 import type { HeroClass } from '../../shared/events.js';
 
 const pad = (rows: string[], total = 15) => [...Array(Math.max(0, total - rows.length)).fill(''), ...rows];
 
 /** 16×16 class sprites from mockup v3, padded so feet sit on row 14. */
-export const SPRITES: Record<HeroClass | 'slime', string[]> = {
+export const SPRITES: Record<HeroClass | Species, string[]> = {
   scout: pad(['...oOOOOOOOOo...', '...OhhOOOOOOO...', '...OOkOOOOkOO...', '..aOOkOOOOkOOa..', '..aOOOOOOOOOOa..', '...OOOOOOOOOO...', '...oOOOOOOOOo...', '....O.O..O.O....', '....d.d..d.d....']),
   adventurer: pad(['...oOOOOOOOOo...', '...OhhOOOOOOO...', 'bB.OOkOOOOkOO...', 'bBaOOkOOOOkOOa..', 'bBaOOOOOOOOOOa..', 'bB.OOOOOOOOOO...', '...oOOOOOOOOo...', '....O.O..O.O....', '....d.d..d.d....']),
   squire: pad(['..............w.', '...bbbbbbbbbb.w.', '..bOhhOOOOOOO.w.', '...OOkOOOOkOO.w.', '..aOOkOOOOkOOWWW', '..aOOOOOOOOOOaW.', '...OOOOOOOOOO...', '...oOOOOOOOOo...', '....O.O..O.O....', '....d.d..d.d....']),
   knight: pad(['......rr........', '.....rRr......s.', '...mmmmmmmm...s.', '..mMMMMMMMMm..s.', '..mmmmmmmmmm..s.', '...OOkOOOkOO..s.', '...OOkOOOkOO..s.', '..aOOOOOOOOOa.s.', '..apPPPPPPPpaggg', '...pPPgPPgPp..g.', '...ppppppppp....', '....O.O..O.O....', '....d.d..d.d....']),
   wizard: pad(['.........V......', '........VV....y.', '.......VVV...yYy', '......VVyVV...l.', '...VVVVVVVVVV.l.', '...OOkOOOOkOO.l.', '...OOkOOOOkOO.l.', '..aOOOOOOOOOOal.', '..avvvvvvvvvval.', '...vVvvvvvVvv.l.', '...vvvvvvvvvv...', '....d.d..d.d....']),
   slime: pad(['......rrrr......', '....rrRRRRrr....', '...rRRhhRRRRr...', '..rRRwwRRwwRRr..', '..rRRwkRRwkRRr..', '.rRRRRRRRRRRRRr.', '.rRRRRkkkkRRRRr.', '.rRRRRRRRRRRRRr.', '..rrrrrrrrrrrr..']),
+  goblin: pad(['g.....gggg.....g', 'gg...gGGGGg...gg', '.gGggGhGGGGggGg.', '..gGGGGGGGGGGg..', '...gGrkGGrkGg...', '....gGGGGGGg....', '....gGwkkwGg....', '.....gggggg.....', '....bbbbbbbb...s', '...gbBBBBBBbg.s.', '...g.bBBBBb.gs..', '.....bbbbbb.....', '.....g....g.....', '....kk....kk....']),
+  // Bats hover: drawn higher, wings up (frame 0) and down (BAT_FLAP).
+  bat: pad(['N......nn......N', 'NN....nNNn....NN', 'NmN..nNNNNn..NmN', 'NmmN.NrNNrN.NmmN', '.NmmNNNNNNNNmmN.', '.NmmN.wNNw.NmmN.', '..NN...nn...NN..'], 11),
+  ogre: pad(['....eeeeeeee....', '...eEEhhEEEEe...', '...eEwkEEwkEe...', '...eEEEEEEEEe.cC', '...eEwEEEEwEe.cC', '....eeeeeeee..cC', '..eeEEEEEEEEeecC', '.eEEEEEEEEEEEEEe', '.eEeEEEEEEEEeEe.', '.eE.bBBBBBBb.Ee.', '....bBBBBBBb....', '....eEe..eEe....', '....eEe..eEe....', '...kkkk..kkkk...']),
 };
+
+const BAT_FLAP = pad(['.......nn.......', '......nNNn......', '...NNnNNNNnNN...', '.NNmmNrNNrNmmNN.', 'NmmmNNNNNNNNmmmN', 'NmN...wNNw...NmN', 'N......nn......N'], 11);
+
+/** Two animation frames per monster: bats flap, everything else hops up a pixel. */
+export function monsterFrames(species: Species): [string[], string[]] {
+  const rows = SPRITES[species];
+  return [rows, species === 'bat' ? BAT_FLAP : [...rows.slice(1), '']];
+}
 
 export const PROPS = {
   crate: ['.bbbbbb.', 'bBBBBBBb', 'bBdBBdBb', 'bbbbbbbb', 'bBBBBBBb', 'bBdBBdBb', 'bBBBBBBb', '.bbbbbb.'],

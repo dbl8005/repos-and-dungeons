@@ -1,0 +1,6 @@
+
+/repo/src/web/net.ts
+  2:1  warning  Unexpected console statement  no-console
+
+✖ 1 problem (0 errors, 1 warning)
+

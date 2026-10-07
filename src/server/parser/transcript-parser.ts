@@ -150,8 +150,14 @@ export function createParser(opts: ParserOptions): TranscriptParser {
             const r = obj.toolUseResult && typeof obj.toolUseResult === 'object' ? obj.toolUseResult : {};
             const output = [r.stdout, r.stderr].filter((s) => typeof s === 'string').join('\n') || text;
             const run = detectTestRun(command, output, c.is_error === true);
-            if (run) emit({ kind: 'test_result', ...run });
-            else emit({ kind: 'cast', command: programName(command) });
+            // Linters often print absolute paths: make them repo-relative, and drop paths outside the repo.
+            if (run) {
+              const failed = run.failed.map((f) => {
+                const file = f.file && !/^[A-Za-z]:|\\/.test(f.file) && toRel(f.file); // Windows paths never pass as relative
+                return file ? { ...f, file } : { name: f.name };
+              });
+              emit({ kind: 'test_result', ...run, failed });
+            } else emit({ kind: 'cast', command: programName(command) });
           }
         }
       }

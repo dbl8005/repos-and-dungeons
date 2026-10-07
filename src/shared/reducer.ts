@@ -1,4 +1,5 @@
-import type { GameEvent, HeroClass, HeroId } from './events.js';
+import { speciesFor, type Species } from './bestiary.js';
+import type { GameEvent, HeroClass, HeroId, TestFailure } from './events.js';
 import type { DungeonMap, PathIndex, Room, Tile } from './map-types.js';
 
 export type HeroStatus = 'active' | 'idle' | 'thinking' | 'locked';
@@ -19,7 +20,11 @@ export type HeroState = {
   lastT: number;
 };
 
-export type Monster = { id: string; hero: HeroId; runner: string; room: string; name: string; file?: string };
+/**
+ * One monster per (hero, runner, failing file); failures without a file share one. `hp` is how many checks fail
+ * there now, `maxHp` the most seen since it spawned. Replaced (never mutated) on change, so old lists stay diffable.
+ */
+export type Monster = { id: string; hero: HeroId; runner: string; species: Species; room: string; name: string; file?: string; hp: number; maxHp: number };
 
 export type GameState = {
   map: DungeonMap;
@@ -68,6 +73,11 @@ export function roomForPath(s: GameState, path: string): Room {
     if (inside && (!best || r.path.length > best.path.length)) best = r;
   }
   return best ?? s.map.rooms[0];
+}
+
+/** The hero's most recently spawned monster (the one whose taunt is showing). */
+export function lastMonsterOf(s: GameState, hero: HeroId): Monster | undefined {
+  return s.monsters.findLast((m) => m.hero === hero);
 }
 
 export const roomCenter = (r: Room) => ({ x: r.x + Math.floor(r.w / 2), y: r.y + Math.floor(r.h / 2) });
@@ -138,14 +148,24 @@ export function reduce(s: GameState, e: GameEvent): GameState {
       }
       break;
     }
-    case 'test_result':
+    case 'test_result': {
       s.version++;
-      s.monsters = s.monsters.filter((m) => !(m.hero === e.hero && m.runner === e.runner));
-      e.failed.forEach((f, i) => {
-        const room = f.file ? roomForPath(s, f.file) : s.map.rooms[0];
-        s.monsters.push({ id: `${e.hero}:${e.runner}:${e.t}:${i}`, hero: e.hero, runner: e.runner, room: room.id, name: f.name, ...(f.file ? { file: f.file } : {}) });
-      });
+      const groups = new Map<string, TestFailure[]>();
+      for (const f of e.failed) groups.set(f.file ?? '', [...(groups.get(f.file ?? '') ?? []), f]);
+      const next = new Map<string, Monster>();
+      for (const [file, fails] of groups) {
+        const id = JSON.stringify([e.hero, e.runner, file]);
+        const old = s.monsters.find((m) => m.id === id);
+        const room = file ? roomForPath(s, file) : s.map.rooms[0];
+        const hp = fails.length;
+        next.set(id, { id, hero: e.hero, runner: e.runner, species: e.species ?? speciesFor(e.runner), room: room.id, name: fails[0].name, ...(file ? { file } : {}), hp, maxHp: Math.max(old?.maxHp ?? 0, hp) });
+      }
+      // Survivors keep their place in the list (so they don't hop around the room); newcomers go last.
+      const kept = s.monsters.flatMap((m) => (m.hero === e.hero && m.runner === e.runner ? (next.has(m.id) ? [next.get(m.id)!] : []) : [m]));
+      const keptIds = new Set(kept.map((m) => m.id));
+      s.monsters = [...kept, ...[...next.values()].filter((m) => !keptIds.has(m.id))];
       break;
+    }
     case 'compacted':
       s.version++;
       for (const id of h.seen) {

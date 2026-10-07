@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import type { GameEvent, HeroClass, HeroId } from '../../shared/events.js';
+import { speciesFor, type Species } from '../../shared/bestiary.js';
 import { fnv1a32 } from '../../shared/hash.js';
-import { cannedLine, type CannedKind } from './lines.js';
+import { cannedLine, tauntLine, type CannedKind } from './lines.js';
 import { SpeechLimiter } from './limiter.js';
 import { sanitizeLine } from './sanitize.js';
 import { summarize } from './summary.js';
@@ -38,7 +39,8 @@ export class Narrator {
   private limiter = new SpeechLimiter({ perHeroMs: 6_000, narratorMs: 15_000 });
   private classes = new Map<HeroId, HeroClass>();
   private recent = new Map<HeroId, GameEvent[]>();
-  private failing = new Map<string, number>();
+  /** The species each (hero, runner) is fighting, while it fails. */
+  private failing = new Map<string, Species>();
   private greeted = new Set<HeroId>();
   private inFlight = 0;
   private failStreak = 0;
@@ -64,13 +66,15 @@ export class Narrator {
         this.canned(e.hero, 'joined', cls, now);
       } else if (e.kind === 'test_result') {
         const key = `${e.hero}:${e.runner}`;
-        const before = this.failing.get(key) ?? 0;
-        this.failing.set(key, e.failed.length);
+        const before = this.failing.get(key);
+        const species = e.species ?? speciesFor(e.runner);
+        if (e.failed.length) this.failing.set(key, before ?? species);
+        else this.failing.delete(key);
         if (e.failed.length && !before) {
-          this.canned(e.hero, 'monster_spawn', cls, now, true);
-          this.say(`monster:${e.hero}`, cannedLine('taunt', 'adventurer', fnv1a32(`${e.hero}${e.t}`)), now);
+          this.canned(e.hero, 'monster_spawn', cls, now, true, species);
+          this.say(`monster:${e.hero}`, tauntLine(species, fnv1a32(`${e.hero}${e.t}`)), now);
         } else if (!e.failed.length && before) {
-          this.canned(e.hero, 'monster_slain', cls, now, true);
+          this.canned(e.hero, 'monster_slain', cls, now, true, before); // a clean build can end a goblin fight
         }
       } else if (e.kind === 'compacted') {
         this.canned(e.hero, 'compacted', cls, now, true);
@@ -125,10 +129,10 @@ export class Narrator {
     }
   }
 
-  private canned(hero: HeroId, kind: CannedKind, cls: HeroClass, now: number, important = false) {
+  private canned(hero: HeroId, kind: CannedKind, cls: HeroClass, now: number, important = false, species?: Species) {
     if (!important && !this.limiter.canSpeak(hero, now)) return;
     this.limiter.spoke(hero, now, false);
-    this.say(hero, cannedLine(kind, cls, fnv1a32(`${hero}:${kind}:${now}`)), now);
+    this.say(hero, cannedLine(kind, cls, fnv1a32(`${hero}:${kind}:${now}`), species), now);
   }
 
   private say(hero: HeroId, text: string, t: number) {

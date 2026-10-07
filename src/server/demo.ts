@@ -31,34 +31,46 @@ function largeTree(): string[] {
   return out;
 }
 
-type Step = { hero: 'lead' | 'scout' | 'squire'; tool: string; input?: object; result?: string; isError?: boolean };
+export type Step = { hero: 'lead' | 'scout' | 'squire'; tool: string; input?: object; result?: string; isError?: boolean };
 
-/**
- * Creates a small fake repo plus a projects folder, then appends a scripted session to it over time, so the
- * dungeon can be watched live without a real agent. Returns the folders to point the dungeon at.
- */
-export function startDemo(o: { stepMs?: number; large?: boolean } = {}): { repo: string; projectsDir: string; stop(): void } {
-  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'rd-demo-')));
-  const repo = path.join(root, 'acme-app');
-  for (const f of o.large ? [...FILES, ...largeTree()] : FILES) {
-    mkdirSync(path.dirname(path.join(repo, f)), { recursive: true });
-    writeFileSync(path.join(repo, f), '');
-  }
-  const projectsDir = path.join(root, 'projects');
-  const dir = path.join(projectsDir, 'demo');
-  mkdirSync(path.join(dir, 'lead', 'subagents'), { recursive: true });
-  const files = {
-    lead: path.join(dir, 'lead.jsonl'),
-    scout: path.join(dir, 'lead', 'subagents', 'agent-scout.jsonl'),
-    squire: path.join(dir, 'squire.jsonl'),
-  };
-  const models = { lead: 'claude-opus-5-5', scout: 'claude-haiku-4-5-20251001', squire: 'claude-sonnet-5-5' };
-  writeFileSync(files.lead, JSON.stringify({ type: 'user', cwd: repo, timestamp: new Date().toISOString(), message: { content: 'Fix the login bug' } }) + '\n');
+const tscOut = (abs: (f: string) => string, n: number, users: number) => [
+  ...Array.from({ length: n }, (_, k) => `${abs('src/auth/token.ts')}(${10 + k * 7},5): error TS2322: Type 'string' is not assignable to type 'number'.`),
+  ...Array.from({ length: users }, () => `${abs('src/routes/users.ts')}(21,9): error TS2339: Property 'id' does not exist on type 'Request'.`),
+].join('\n');
 
-  const abs = (f: string) => path.join(repo, f);
+function bestiarySteps(abs: (f: string) => string): Step[] {
+  const eslintFail = `\n${abs('src/ui/App.tsx')}\n   4:10  error    'useState' is defined but never used  @typescript-eslint/no-unused-vars\n  12:1   warning  Unexpected console statement          no-console\n  18:7   error    'theme' is assigned a value but never used  @typescript-eslint/no-unused-vars\n  33:3   error    Missing return type on function  @typescript-eslint/explicit-function-return-type\n\n${abs('src/ui/Login.tsx')}\n  9:5  error  'password' is assigned a value but never used  @typescript-eslint/no-unused-vars\n\n✖ 5 problems (4 errors, 1 warning)\n`;
+  const viteFail = 'vite v8.3.2 building for production...\ntransforming...\n✓ 41 modules transformed.\n[vite:esbuild] Transform failed with 1 error:\nerror: Unexpected "}"\nBuild failed in 210ms';
+  return [
+    { hero: 'lead', tool: 'Read', input: { file_path: abs('src/auth/token.ts') } },
+    { hero: 'lead', tool: 'Bash', input: { command: 'npm run typecheck' }, result: tscOut(abs, 6, 1), isError: true },
+    { hero: 'squire', tool: 'Read', input: { file_path: abs('src/ui/App.tsx') } },
+    { hero: 'squire', tool: 'Bash', input: { command: 'npm run lint' }, result: eslintFail, isError: true },
+    { hero: 'scout', tool: 'Read', input: { file_path: abs('package.json') } },
+    { hero: 'scout', tool: 'Bash', input: { command: 'npm run build' }, result: viteFail, isError: true },
+    { hero: 'lead', tool: 'Edit', input: { file_path: abs('src/auth/token.ts') } },
+    { hero: 'lead', tool: 'Edit', input: { file_path: abs('src/routes/users.ts') } },
+    { hero: 'scout', tool: 'Read', input: { file_path: abs('src/auth/session.ts') } },
+    { hero: 'squire', tool: 'Read', input: { file_path: abs('src/ui/Login.tsx') } },
+    { hero: 'lead', tool: 'Bash', input: { command: 'npm run typecheck' }, result: tscOut(abs, 3, 0), isError: true },
+    { hero: 'squire', tool: 'Edit', input: { file_path: abs('src/ui/App.tsx') } },
+    { hero: 'squire', tool: 'Edit', input: { file_path: abs('src/ui/Login.tsx') } },
+    { hero: 'squire', tool: 'Bash', input: { command: 'npm run lint' }, result: '' },
+    { hero: 'lead', tool: 'Edit', input: { file_path: abs('src/auth/token.ts') } },
+    { hero: 'lead', tool: 'Bash', input: { command: 'npm run typecheck' }, result: '' },
+    { hero: 'scout', tool: 'Edit', input: { file_path: abs('src/config.ts') } },
+    { hero: 'scout', tool: 'Bash', input: { command: 'npm run build' }, result: '✓ built in 1.2s' },
+    { hero: 'lead', tool: 'Read', input: { file_path: abs('README.md') } },
+    { hero: 'scout', tool: 'Read', input: { file_path: abs('docs/api.md') } },
+  ];
+}
+
+/** The scripted steps for a scenario; pure, so tests can use them without timers or a temp repo. */
+export function demoSteps(scenario: 'default' | 'bestiary', abs: (f: string) => string): Step[] {
+  if (scenario === 'bestiary') return bestiarySteps(abs);
   const vitestFail = ' FAIL  src/auth/token.test.ts > token > expires\n FAIL  src/auth/session.test.ts > session > refresh\n Test Files  2 failed (2)\n      Tests  2 failed | 9 passed (11)';
   const vitestPass = ' Test Files  2 passed (2)\n      Tests  11 passed (11)';
-  const steps: Step[] = [
+  return [
     { hero: 'lead', tool: 'Read', input: { file_path: abs('README.md') } },
     { hero: 'lead', tool: 'Read', input: { file_path: abs('src/index.ts') } },
     { hero: 'lead', tool: 'Read', input: { file_path: abs('src/server.ts') } },
@@ -78,6 +90,32 @@ export function startDemo(o: { stepMs?: number; large?: boolean } = {}): { repo:
     { hero: 'squire', tool: 'Write', input: { file_path: abs('src/db/seed.ts') }, result: 'File created successfully' },
     { hero: 'lead', tool: 'Read', input: { file_path: abs('src/ui/Login.tsx') } },
   ];
+}
+
+/**
+ * Creates a small fake repo plus a projects folder, then appends a scripted session to it over time, so the
+ * dungeon can be watched live without a real agent. Returns the folders to point the dungeon at.
+ */
+export function startDemo(o: { stepMs?: number; large?: boolean; scenario?: 'default' | 'bestiary' } = {}): { repo: string; projectsDir: string; stop(): void } {
+  const root = realpathSync(mkdtempSync(path.join(tmpdir(), 'rd-demo-')));
+  const repo = path.join(root, 'acme-app');
+  for (const f of o.large ? [...FILES, ...largeTree()] : FILES) {
+    mkdirSync(path.dirname(path.join(repo, f)), { recursive: true });
+    writeFileSync(path.join(repo, f), '');
+  }
+  const projectsDir = path.join(root, 'projects');
+  const dir = path.join(projectsDir, 'demo');
+  mkdirSync(path.join(dir, 'lead', 'subagents'), { recursive: true });
+  const files = {
+    lead: path.join(dir, 'lead.jsonl'),
+    scout: path.join(dir, 'lead', 'subagents', 'agent-scout.jsonl'),
+    squire: path.join(dir, 'squire.jsonl'),
+  };
+  const models = { lead: 'claude-opus-5-5', scout: 'claude-haiku-4-5-20251001', squire: 'claude-sonnet-5-5' };
+  writeFileSync(files.lead, JSON.stringify({ type: 'user', cwd: repo, timestamp: new Date().toISOString(), message: { content: 'Fix the login bug' } }) + '\n');
+
+  const abs = (f: string) => path.join(repo, f);
+  const steps = demoSteps(o.scenario ?? 'default', abs);
 
   let i = 0;
   const timer = setInterval(() => {

@@ -9,12 +9,13 @@ Opens your repo as a live dungeon in the browser. Every Claude Code session
 running in the repo shows up as a hero.
 
 Options:
-  --port <n>     port to listen on (default: a random free port)
-  --no-open      don't open the browser
-  --no-narrator  no Haiku speech lines (built-in lines still play)
-  --demo         watch a scripted demo session in a fake repo (no agent needed)
-  --demo-large   the same demo in a ~2,500-file monorepo
-  -h, --help     show this help
+  --port <n>       port to listen on (default: a random free port)
+  --no-open        don't open the browser
+  --no-narrator    no Haiku speech lines (built-in lines still play)
+  --demo           watch a scripted demo session in a fake repo (no agent needed)
+  --demo-large     the same demo in a ~2,500-file monorepo
+  --demo-bestiary  the demo with type-check, lint and build monsters
+  -h, --help       show this help
 `;
 
 async function main(argv: string[]) {
@@ -23,6 +24,7 @@ async function main(argv: string[]) {
   let openBrowser = true;
   let demo = false;
   let large = false;
+  let scenario: 'default' | 'bestiary' = 'default';
   let narrator = true;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -30,6 +32,7 @@ async function main(argv: string[]) {
     else if (a === '--no-open') openBrowser = false;
     else if (a === '--demo') demo = true;
     else if (a === '--demo-large') demo = large = true;
+    else if (a === '--demo-bestiary') (demo = true), (scenario = 'bestiary');
     else if (a === '--no-narrator') narrator = false;
     else if (a === '--port') port = Number(argv[++i]);
     else if (a.startsWith('-')) throw new Error(`Unknown option: ${a}\n\n${HELP}`);
@@ -41,7 +44,7 @@ async function main(argv: string[]) {
   let projectsDir = process.env.RD_PROJECTS_DIR;
   if (demo) {
     const { startDemo } = await import('./server/demo.js');
-    const dm = startDemo({ large });
+    const dm = startDemo({ large, scenario });
     repo = dm.repo;
     projectsDir = dm.projectsDir;
   }

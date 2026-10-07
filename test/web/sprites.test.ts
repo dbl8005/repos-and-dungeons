@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PROP_PALETTE, SPRITE_PALETTES } from '../../src/web/art/palette.js';
-import { PROPS, SPRITES, spriteToRGBA, walkFrames } from '../../src/web/art/sprites.js';
+import { monsterFrames, PROPS, SPRITES, spriteToRGBA, walkFrames } from '../../src/web/art/sprites.js';
 
 describe('sprites', () => {
   it('class sprites are at most 16×16 and every pixel has a color', () => {
@@ -40,5 +40,16 @@ describe('sprites', () => {
   });
   it('every hero class has a sprite', () => {
     for (const c of ['knight', 'squire', 'scout', 'wizard', 'adventurer', 'slime']) expect(SPRITES).toHaveProperty(c);
+  });
+  it('every species has two distinct 16×16 frames in its palette', () => {
+    for (const sp of ['slime', 'goblin', 'bat', 'ogre'] as const) {
+      const [a, b] = monsterFrames(sp);
+      expect(a).toBe(SPRITES[sp]);
+      expect(b, sp).not.toEqual(a);
+      for (const r of [...a, ...b]) {
+        expect(r.length, `${sp}: ${r}`).toBeLessThanOrEqual(16);
+        for (const ch of r) if (ch !== '.') expect(SPRITE_PALETTES[sp][ch], `${sp} '${ch}'`).toBeTypeOf('string');
+      }
+    }
   });
 });

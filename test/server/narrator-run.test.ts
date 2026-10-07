@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { GameEvent } from '../../src/shared/events.js';
+import { cannedLine, tauntLine } from '../../src/server/narrator/lines.js';
 import { Narrator } from '../../src/server/narrator/narrator.js';
+import { fnv1a32 } from '../../src/shared/hash.js';
 
 const NOW = 1_000_000;
 const mk = (o: { run?: (p: string) => Promise<string>; enabled?: boolean; now?: () => number }) => {
@@ -17,6 +19,29 @@ describe('Narrator', () => {
     n.observe([join('h1'), ev('h1', { kind: 'test_result', runner: 'vitest', passed: 1, failed: [{ name: 'x' }] })]);
     expect(speech().map((s) => s.hero)).toContain('h1');
     expect(speech().map((s) => s.hero)).toContain('monster:h1');
+  });
+
+  it('the taunt comes from the spawning species', () => {
+    const { n, speech } = mk({ enabled: false });
+    n.observe([join('h1'), ev('h1', { kind: 'test_result', runner: 'build', species: 'goblin', passed: 0, failed: [{ file: 'src/a.ts', name: 'TS2322' }] })]);
+    const taunt = speech().find((s) => s.hero === 'monster:h1')!;
+    expect(taunt.text).toBe(tauntLine('goblin', fnv1a32(`h1${NOW}`)));
+    expect(tauntLine('goblin', 0)).not.toBe(tauntLine('slime', 0));
+  });
+
+  it('the victory line is about the species that was beaten, even when a clean build ends a goblin fight', () => {
+    // a moment where the goblin and ogre victory lines differ, so the assertion can tell them apart
+    const line = (t: number, sp: 'goblin' | 'ogre') => cannedLine('monster_slain', 'knight', fnv1a32(`h1:monster_slain:${t}`), sp);
+    let later = NOW + 10_000;
+    while (line(later, 'goblin') === line(later, 'ogre')) later++;
+    let now = NOW;
+    const { n, speech } = mk({ enabled: false, now: () => now });
+    n.observe([join('h1'), ev('h1', { kind: 'test_result', runner: 'build', species: 'goblin', passed: 0, failed: [{ file: 'src/a.ts', name: 'TS2322' }] })]);
+    const before = speech().length;
+    now = later;
+    n.observe([ev('h1', { kind: 'test_result', runner: 'build', passed: 0, failed: [] }, later)]);
+    const slain = speech().slice(before).find((s) => s.hero === 'h1')!;
+    expect(slain.text).toBe(line(later, 'goblin'));
   });
 
   it('calls Haiku once for fresh activity and publishes the sanitized reply', async () => {
