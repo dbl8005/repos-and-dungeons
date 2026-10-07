@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { GameEvent } from '../../src/shared/events.js';
 import type { DungeonMap, PathIndex } from '../../src/shared/map-types.js';
-import { initialState, reduce, remapState, roomForPath, tileForPath } from '../../src/shared/reducer.js';
+import { BOSS_HP, isBoss, speciesFor } from '../../src/shared/bestiary.js';
+import { initialState, lastMonsterOf, reduce, remapState, roomForPath, tileForPath } from '../../src/shared/reducer.js';
 
 const map: DungeonMap = {
   seed: 'x', width: 40, height: 20,
@@ -61,6 +62,96 @@ describe('reducer', () => {
     reduce(s, { ...fail, t: ++t });
     expect(s.monsters).toHaveLength(1);
   });
+  describe('combat', () => {
+    const run = (runner: string, failed: { file?: string; name: string }[]) => ev('h1', { kind: 'test_result', runner, passed: 0, failed });
+    const tok = 'src/auth/token.test.ts';
+    const fails = (n: number, file = tok) => Array.from({ length: n }, (_, i) => ({ file, name: `t${i}` }));
+
+    it('one monster per file; reruns keep the same monster (no respawn)', () => {
+      const s = initialState(map, index);
+      reduce(s, run('vitest', fails(3)));
+      const first = s.monsters[0];
+      expect(s.monsters).toHaveLength(1);
+      expect(first).toMatchObject({ id: JSON.stringify(['h1', 'vitest', tok]), hp: 3, maxHp: 3, species: 'slime', room: 'r2', name: 't0', file: tok });
+      reduce(s, run('vitest', fails(3)));
+      expect(s.monsters.map((m) => m.id)).toEqual([first.id]);
+    });
+    it('damage lowers hp, maxHp remembers the peak, and the old object is left untouched', () => {
+      const s = initialState(map, index);
+      reduce(s, run('vitest', fails(3)));
+      const before = s.monsters;
+      reduce(s, run('vitest', fails(1)));
+      expect(s.monsters[0]).toMatchObject({ hp: 1, maxHp: 3 });
+      expect(before[0].hp).toBe(3);
+      reduce(s, run('vitest', fails(2)));
+      expect(s.monsters[0]).toMatchObject({ hp: 2, maxHp: 3 });
+    });
+    it('dies on a clean rerun or when its file stops failing; maxHp resets after death', () => {
+      const s = initialState(map, index);
+      reduce(s, run('vitest', [...fails(2), ...fails(1, 'src/a.test.ts')]));
+      expect(s.monsters.map((m) => m.file)).toEqual([tok, 'src/a.test.ts']);
+      expect(s.monsters.map((m) => m.room)).toEqual(['r2', 'r1']);
+      reduce(s, run('vitest', fails(1, 'src/a.test.ts')));
+      expect(s.monsters.map((m) => m.file)).toEqual(['src/a.test.ts']);
+      reduce(s, run('vitest', []));
+      expect(s.monsters).toEqual([]);
+      reduce(s, run('vitest', fails(1)));
+      expect(s.monsters[0]).toMatchObject({ hp: 1, maxHp: 1 });
+    });
+    it('failures without a file group into one monster per runner', () => {
+      const s = initialState(map, index);
+      reduce(s, run('generic', [{ name: 'a' }, { name: 'b' }]));
+      expect(s.monsters).toHaveLength(1);
+      expect(s.monsters[0]).toMatchObject({ id: JSON.stringify(['h1', 'generic', '']), hp: 2, room: 'r0', name: 'a' });
+      expect(s.monsters[0].file).toBeUndefined();
+    });
+    it('species come from the runner; other runners are left alone', () => {
+      const s = initialState(map, index);
+      reduce(s, run('typecheck', fails(1, 'src/a.ts')));
+      reduce(s, run('lint', fails(1, 'src/a.ts')));
+      reduce(s, run('build', [{ name: 'build' }]));
+      expect(s.monsters.map((m) => m.species)).toEqual(['goblin', 'bat', 'ogre']);
+      reduce(s, run('typecheck', []));
+      expect(s.monsters.map((m) => m.species)).toEqual(['bat', 'ogre']);
+    });
+    it('the event species wins over the runner; a build key can hold goblins and an ogre', () => {
+      const s = initialState(map, index);
+      reduce(s, ev('h1', { kind: 'test_result', runner: 'build', species: 'goblin', passed: 0, failed: fails(1, 'src/a.ts') }));
+      expect(s.monsters.map((m) => m.species)).toEqual(['goblin']);
+      reduce(s, ev('h1', { kind: 'test_result', runner: 'build', species: 'ogre', passed: 0, failed: [{ name: 'build' }] }));
+      expect(s.monsters.map((m) => m.species)).toEqual(['ogre']);
+      reduce(s, ev('h1', { kind: 'test_result', runner: 'build', passed: 0, failed: [] }));
+      expect(s.monsters).toEqual([]);
+    });
+    it('ids cannot collide when names contain the separator', () => {
+      const s = initialState(map, index);
+      reduce(s, run('a:b', [{ file: 'c', name: 'x' }]));
+      reduce(s, run('a', [{ file: 'b:c', name: 'x' }]));
+      expect(new Set(s.monsters.map((m) => m.id)).size).toBe(2);
+    });
+    it('lastMonsterOf is the hero\'s most recently spawned monster', () => {
+      const s = initialState(map, index);
+      reduce(s, run('vitest', fails(1)));
+      reduce(s, run('typecheck', fails(1, 'src/a.ts')));
+      reduce(s, run('vitest', fails(2)));
+      expect(lastMonsterOf(s, 'h1')?.species).toBe('goblin');
+      expect(lastMonsterOf(s, 'nobody')).toBeUndefined();
+    });
+    it('a file with BOSS_HP failures is a boss', () => {
+      const s = initialState(map, index);
+      reduce(s, run('vitest', fails(BOSS_HP)));
+      expect(isBoss(s.monsters[0])).toBe(true);
+      reduce(s, run('vitest', fails(BOSS_HP - 1)));
+      expect(isBoss(s.monsters[0])).toBe(false);
+    });
+    it('every test_result bumps the version', () => {
+      const s = initialState(map, index);
+      const v = s.version;
+      reduce(s, run('vitest', fails(2)));
+      reduce(s, run('vitest', fails(1)));
+      expect(s.version).toBe(v + 2);
+    });
+  });
   it('compaction re-fogs only tiles no other hero has seen', () => {
     const s = initialState(map, index);
     reduce(s, join('h1'));
@@ -106,7 +197,8 @@ describe('reducer', () => {
     reduce(s, join('h1'));
     reduce(s, ev('h1', { kind: 'move', path: 'src/a.ts' }));
     reduce(s, ev('h1', { kind: 'forge', path: 'src/auth/token.ts', created: false }));
-    reduce(s, ev('h1', { kind: 'test_result', runner: 'vitest', passed: 0, failed: [{ file: 'src/auth/token.test.ts', name: 'x' }] }));
+    reduce(s, ev('h1', { kind: 'test_result', runner: 'typecheck', passed: 0, failed: [{ file: 'src/auth/token.test.ts', name: 'x' }, { file: 'src/auth/token.test.ts', name: 'y' }] }));
+    reduce(s, ev('h1', { kind: 'test_result', runner: 'typecheck', passed: 0, failed: [{ file: 'src/auth/token.test.ts', name: 'x' }] }));
     const map2: DungeonMap = { ...map, tiles: map.tiles.map((t) => ({ ...t, id: t.id + 10 })) };
     const index2: PathIndex = Object.fromEntries(Object.entries(index).map(([k, v]) => [k, v + 10]));
     const n = remapState(s, map2, index2);
@@ -114,6 +206,7 @@ describe('reducer', () => {
     expect([...n.forged]).toEqual([12]);
     expect(n.heroes.h1.seen.has(11)).toBe(true);
     expect(n.monsters).toHaveLength(1);
+    expect(n.monsters[0]).toMatchObject({ hp: 1, maxHp: 2, species: 'goblin', room: 'r2' });
   });
   it('remapState moves heroes onto their last file in the new map, else to the root room', () => {
     const s = initialState(map, index);
@@ -146,5 +239,11 @@ describe('reducer', () => {
     reduce(s, ev('monster:h1', { kind: 'speech', text: 'Your tests are MINE!' }));
     expect(s.heroes['monster:h1']).toBeUndefined();
     expect(s.taunts.h1).toMatchObject({ text: 'Your tests are MINE!' });
+  });
+});
+
+describe('bestiary', () => {
+  it('maps runners to species', () => {
+    expect(['vitest', 'pytest', 'generic', 'whatever', 'typecheck', 'lint', 'build'].map(speciesFor)).toEqual(['slime', 'slime', 'slime', 'slime', 'goblin', 'bat', 'ogre']);
   });
 });

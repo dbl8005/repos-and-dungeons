@@ -1,13 +1,16 @@
 /** Colors from the approved mockup v3 (moody hi-bit). */
 const CLAUDE = { O: '#d97757', o: '#b65f3e', h: '#f2a98a', k: '#1a0f0a', a: '#d97757', d: '#7a3a22' };
 
-export const SPRITE_PALETTES: Record<'scout' | 'adventurer' | 'squire' | 'knight' | 'wizard' | 'slime', Record<string, string>> = {
+export const SPRITE_PALETTES: Record<'scout' | 'adventurer' | 'squire' | 'knight' | 'wizard' | 'slime' | 'goblin' | 'bat' | 'ogre', Record<string, string>> = {
   scout: CLAUDE,
   adventurer: { ...CLAUDE, b: '#6a4a2a', B: '#9a6a3a' },
   squire: { ...CLAUDE, w: '#d6a061', W: '#7a4e2a', b: '#3f7f5a' },
   knight: { ...CLAUDE, m: '#5d6672', M: '#b4bdc8', r: '#a8202c', R: '#e8505e', s: '#eef3f6', g: '#d4a43a', p: '#59626e', P: '#a0aab6' },
   wizard: { ...CLAUDE, V: '#4a2a8c', v: '#5f38ab', y: '#a8f4ff', Y: '#ffffff', l: '#7a4e2a' },
   slime: { r: '#6a0e1c', R: '#d8324a', h: '#ff8a9a', w: '#fff', k: '#2a0008' },
+  goblin: { g: '#2f5a1e', G: '#5fa83a', h: '#9be06a', r: '#ff3a3a', k: '#140a04', w: '#fff', b: '#4a3220', B: '#7e5a38', s: '#c8d0d8' },
+  bat: { n: '#2a1838', N: '#4a2e66', m: '#7a4a9a', r: '#ff3a4a', w: '#fff' },
+  ogre: { e: '#55602a', E: '#8a9a48', h: '#c0cc7a', k: '#1a1208', w: '#fff', b: '#4a2e14', B: '#7a4e24', c: '#4a3220', C: '#7e5a38' },
 };
 
 const PROP_BASE = { b: '#4a3220', B: '#7e5a38', d: '#2e2014', p: '#a89878', P: '#e6dcc0', k: '#5a4a3a', y: '#c08a10', Y: '#ffd040', w: '#fffbe0', O: '#ff7020', o: '#c04010' };

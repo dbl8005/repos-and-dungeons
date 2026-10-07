@@ -1,0 +1,5 @@
+app/models.py:14: error: Incompatible return value type (got "str", expected "int")  [return-value]
+app/models.py:27: error: Name "foo" is not defined  [name-defined]
+app/views.py:5: note: See https://mypy.readthedocs.io/en/stable/
+app/views.py:9: error: Missing return statement
+Found 3 errors in 2 files (checked 12 source files)

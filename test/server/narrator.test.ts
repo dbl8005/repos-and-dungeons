@@ -66,3 +66,22 @@ describe('SpeechLimiter', () => {
     expect(l.canNarrate('c', 1)).toBe(true);
   });
 });
+
+describe('monster lines follow the species', () => {
+  const classes = ['knight', 'squire', 'scout', 'wizard', 'adventurer'] as const;
+  it('only slime lines talk about slimes or tests', () => {
+    for (const species of ['goblin', 'bat', 'ogre'] as const) for (const c of classes) for (let seed = 0; seed < 40; seed++) {
+      for (const k of ['monster_spawn', 'monster_slain'] as const) {
+        expect(cannedLine(k, c, seed, species), `${species} ${c} ${k} ${seed}`).not.toMatch(/slime|\btests?\b/i);
+      }
+    }
+  });
+  it('the summary names the kind of check, not always tests', () => {
+    const tr = (runner: string, failed: number, species?: string) => ev({ kind: 'test_result', runner, passed: 0, failed: Array(failed).fill({ name: 'x' }), ...(species ? { species } : {}) } as object);
+    expect(summarize('knight', [tr('lint', 4, 'bat')])).toBe('lint: 4 errors');
+    expect(summarize('knight', [tr('build', 2, 'goblin')])).toBe('build: 2 type errors');
+    expect(summarize('knight', [tr('build', 1, 'ogre')])).toBe('build: failing');
+    expect(summarize('knight', [tr('typecheck', 0)])).toBe('typecheck: all clear');
+    expect(summarize('knight', [ev({ kind: 'test_result', runner: 'vitest', passed: 3, failed: [] } as object)])).toBe('tests: all 3 passing');
+  });
+});

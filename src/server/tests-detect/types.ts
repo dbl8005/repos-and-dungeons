@@ -1,6 +1,7 @@
+import type { Species } from '../../shared/bestiary.js';
 import type { TestFailure } from '../../shared/events.js';
 
-export type TestRun = { runner: string; failed: TestFailure[]; passed: number };
+export type TestRun = { runner: string; species?: Species; failed: TestFailure[]; passed: number };
 /** Returns null when the output doesn't look like this runner's. */
 export type RunnerDetector = (output: string) => TestRun | null;
 

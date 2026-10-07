@@ -1,0 +1,16 @@
+src/auth/token.ts:12:5 - error TS2322: Type 'string' is not assignable to type 'number'.
+
+12     const n: number = claims.sub;
+       ~
+
+src/a.ts:3:1 - error TS2304: Cannot find name 'foo'.
+
+3 foo();
+  ~~~
+
+
+Found 2 errors in 2 files.
+
+Errors  Files
+     1  src/auth/token.ts:12
+     1  src/a.ts:3

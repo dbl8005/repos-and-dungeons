@@ -1,0 +1,6 @@
+/repo/app/models.py
+  /repo/app/models.py:14:12 - error: Type "str" is not assignable to return type "int" (reportReturnType)
+  /repo/app/models.py:20:1 - warning: Import "os" is not accessed (reportUnusedImport)
+/repo/app/views.py
+  /repo/app/views.py:9:5 - error: "foo" is not defined (reportUndefinedVariable)
+2 errors, 1 warning, 0 informations 

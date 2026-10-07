@@ -1,12 +1,14 @@
 import { Texture } from 'pixi.js';
+import type { Species } from '../../shared/bestiary.js';
 import type { HeroClass } from '../../shared/events.js';
 import { PROP_PALETTE, SPRITE_PALETTES } from './palette.js';
-import { PROPS, SPRITES, spriteToRGBA, walkFrames } from './sprites.js';
+import { monsterFrames, PROPS, SPRITES, spriteToRGBA, walkFrames } from './sprites.js';
 
 export type PropName = keyof typeof PROPS;
 export type ArtTextures = {
   hero: Record<HeroClass, Texture[]>;
-  slime: Texture[];
+  /** Two frames per species. */
+  monsters: Record<Species, Texture[]>;
   props: Record<PropName, Texture>;
   /** 128 px white radial gradient, for lights and glows. */
   gradient: Texture;
@@ -39,6 +41,7 @@ export function buildTextures(): ArtTextures {
   const classes: HeroClass[] = ['knight', 'squire', 'scout', 'wizard', 'adventurer'];
   const hero = Object.fromEntries(classes.map((c) => [c, walkFrames(SPRITES[c]).map((f) => pixelTexture(f, SPRITE_PALETTES[c], 16))])) as Record<HeroClass, Texture[]>;
   const props = Object.fromEntries(Object.entries(PROPS).map(([k, rows]) => [k, pixelTexture(rows, PROP_PALETTE[k as PropName], 8)])) as Record<PropName, Texture>;
-  const slime = [SPRITES.slime, [...SPRITES.slime.slice(1), '']].map((f) => pixelTexture(f, SPRITE_PALETTES.slime, 16));
-  return { hero, slime, props, gradient: gradientTexture() };
+  const species: Species[] = ['slime', 'goblin', 'bat', 'ogre'];
+  const monsters = Object.fromEntries(species.map((sp) => [sp, monsterFrames(sp).map((f) => pixelTexture(f, SPRITE_PALETTES[sp], 16))])) as Record<Species, Texture[]>;
+  return { hero, monsters, props, gradient: gradientTexture() };
 }

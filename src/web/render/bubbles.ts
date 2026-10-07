@@ -1,5 +1,5 @@
 import type { HeroId } from '../../shared/events.js';
-import type { GameState } from '../../shared/reducer.js';
+import { lastMonsterOf, type GameState } from '../../shared/reducer.js';
 import { CLASS_NAME_COLORS } from '../art/palette.js';
 
 const SHOW_MS = 5_000;
@@ -10,7 +10,7 @@ const NAMES = { knight: 'OPUS', squire: 'SONNET', scout: 'HAIKU', wizard: 'FABLE
 type Bubble = { key: string; who: string; color: string; text: string; t: number; taunt: boolean; pos: { x: number; y: number } };
 type Pos = (id: HeroId) => { x: number; y: number } | null;
 
-/** HTML speech bubbles (mockup v3 style) that follow heroes and slimes, typing their line out. */
+/** HTML speech bubbles (mockup v3 style) that follow heroes and monsters, typing their line out. */
 export class BubbleLayer {
   private els = new Map<string, HTMLDivElement>();
 
@@ -26,7 +26,7 @@ export class BubbleLayer {
     for (const [hero, tt] of Object.entries(s.taunts)) {
       if (now - tt.t > SHOW_MS) continue;
       const pos = monsterPos(hero);
-      if (pos) list.push({ key: `monster:${hero}`, who: 'SLIME', color: '#ff6b81', text: tt.text, t: tt.t, taunt: true, pos });
+      if (pos) list.push({ key: `monster:${hero}`, who: (lastMonsterOf(s, hero)?.species ?? 'slime').toUpperCase(), color: '#ff6b81', text: tt.text, t: tt.t, taunt: true, pos });
     }
     const shown = list.sort((a, b) => b.t - a.t).slice(0, MAX_VISIBLE);
     const keep = new Set(shown.map((b) => b.key));

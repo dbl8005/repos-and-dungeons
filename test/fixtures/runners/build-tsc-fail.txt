@@ -1,0 +1,6 @@
+
+> my-app@1.0.0 build
+> tsc -p tsconfig.build.json && vite build
+
+src/server/app.ts(44,3): error TS2554: Expected 2 arguments, but got 1.
+src/server/app.ts(51,9): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.

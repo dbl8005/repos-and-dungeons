@@ -1,3 +1,5 @@
+import type { Species } from './bestiary.js';
+
 export type HeroId = string; // sessionId, or `${sessionId}/${agentId}` for subagents
 export type HeroClass = 'knight' | 'squire' | 'scout' | 'wizard' | 'adventurer';
 export type TestFailure = { file?: string; name: string };
@@ -9,7 +11,8 @@ export type GameEvent = { t: number; hero: HeroId } & (
   | { kind: 'scout'; paths: string[] }
   | { kind: 'forge'; path: string; created: boolean }
   | { kind: 'cast'; command: string }
-  | { kind: 'test_result'; runner: string; failed: TestFailure[]; passed: number }
+  /** `runner` keys the monsters (a test runner, or a check category); `species`, when set, is what the output showed. */
+  | { kind: 'test_result'; runner: string; species?: Species; failed: TestFailure[]; passed: number }
   | { kind: 'door_locked' }
   | { kind: 'door_opened' }
   | { kind: 'torch'; used: number; max: number }

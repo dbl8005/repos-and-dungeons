@@ -1,7 +1,9 @@
 import { Container, Graphics, Sprite, Text } from 'pixi.js';
+import { isBoss, type Species } from '../../shared/bestiary.js';
 import type { GameEvent, HeroId } from '../../shared/events.js';
-import type { GameState, Monster } from '../../shared/reducer.js';
+import { lastMonsterOf, type GameState, type Monster } from '../../shared/reducer.js';
 import { CLASS_NAME_COLORS } from '../art/palette.js';
+import { SPRITES } from '../art/sprites.js';
 import type { ArtTextures } from '../art/textures.js';
 import { T } from '../art/tiles.js';
 import { HeroAnimator } from '../world/anim-queue.js';
@@ -15,15 +17,20 @@ const PLATE = { knight: 'Opus', squire: 'Sonnet', scout: 'Haiku', wizard: 'Fable
 type HeroView = { c: Container; sprite: Sprite; plate: Text; anim: HeroAnimator; heroClass: string; blink: number; px: number; py: number };
 type Particle = { g: Graphics; x: number; y: number; vx: number; vy: number; life: number; max: number };
 type Popup = { t: Text; life: number };
+/** A monster: container pivoted at its feet, so it scales up (boss, overview) without sinking into the floor. */
+type MonsterView = { c: Container; s: Sprite; bar: Graphics; crown: Graphics; species: Species; phase: number; flash: number; drawn: string };
 
-/** Heroes (walking sprites), slimes, and short-lived effects. Positions in world pixels (16 per tile). */
+/** First painted row of each monster sprite, so the HP bar and crown sit right on its head. */
+const HEAD = Object.fromEntries((['slime', 'goblin', 'bat', 'ogre'] as const).map((sp) => [sp, SPRITES[sp].findIndex((r) => /[^.]/.test(r))])) as Record<Species, number>;
+
+/** Heroes (walking sprites), monsters, and short-lived effects. Positions in world pixels (16 per tile). */
 export class ActorLayer {
   readonly container = new Container();
   private heroLayer = new Container();
   private monsterLayer = new Container();
   private fx = new Container();
   private heroes = new Map<HeroId, HeroView>();
-  private monsters = new Map<string, { s: Sprite; phase: number }>();
+  private monsters = new Map<string, MonsterView>();
   private particles: Particle[] = [];
   private popups: Popup[] = [];
 
@@ -39,13 +46,18 @@ export class ActorLayer {
     if (!this.opts.timelapse && !isFresh(e.t, Date.now())) return; // history replayed on connect: positions only, no effects
     if (e.kind === 'forge' && h) this.burst(h.x * T + 8, h.y * T + 8, 0xffc85a, 12, e.created ? 1.6 : 1);
     if (e.kind === 'test_result') {
-      const alive = new Set(s.monsters.map((m) => m.id));
+      const after = new Map(s.monsters.map((m) => [m.id, m]));
       for (const m of before) {
-        if (alive.has(m.id)) continue;
         const v = this.monsters.get(m.id);
-        if (!v) continue;
-        this.burst(v.s.x + 8, v.s.y + 8, 0xffd043, 16, 1.2);
-        this.popup(v.s.x + 4, v.s.y - 2, '-1');
+        const hp = after.get(m.id)?.hp ?? 0;
+        if (!v || hp >= m.hp) continue;
+        const { x, y } = this.center(v);
+        if (hp === 0) this.burst(x, y, 0xffd043, 16, 1.2); // slain
+        else {
+          this.burst(x, y, 0xffffff, 6, 0.8);
+          v.flash = 300;
+        }
+        this.popup(x - 4, y - 10 * v.c.scale.y, `-${m.hp - hp}`);
       }
     }
   }
@@ -99,15 +111,13 @@ export class ActorLayer {
       v.plate.visible = lod === 'close';
       v.plate.text = PLATE[h.heroClass];
     }
-    this.syncMonsters(s, t);
-    this.monsterLayer.scale.set(1);
-    for (const v of this.monsters.values()) v.s.scale.set(lod === 'far' ? -3 : -1, lod === 'far' ? 3 : 1);
+    this.syncMonsters(s, t, dtMs, lod);
     this.tickFx(dtMs);
   }
 
-  private syncMonsters(s: GameState, t: number) {
+  private syncMonsters(s: GameState, t: number, dtMs: number, lod: Lod) {
     const alive = new Set(s.monsters.map((m) => m.id));
-    for (const [id, v] of this.monsters) if (!alive.has(id)) { v.s.destroy(); this.monsters.delete(id); }
+    for (const [id, v] of this.monsters) if (!alive.has(id)) { v.c.destroy({ children: true }); this.monsters.delete(id); }
     const perRoom = new Map<string, number>();
     for (const m of s.monsters) {
       const r = s.rooms.get(m.room);
@@ -116,17 +126,51 @@ export class ActorLayer {
       perRoom.set(m.room, i + 1);
       let v = this.monsters.get(m.id);
       if (!v) {
-        v = { s: new Sprite(this.art.slime[0]), phase: (i * 1.7) % 6.28 };
-        v.s.scale.x = -1;
-        this.monsterLayer.addChild(v.s);
+        const c = new Container();
+        const sprite = new Sprite(this.art.monsters[m.species][0]);
+        sprite.scale.x = -1; // monsters face the heroes
+        sprite.x = 16;
+        v = { c, s: sprite, bar: new Graphics(), crown: new Graphics(), species: m.species, phase: (i * 1.7) % 6.28, flash: 0, drawn: '' };
+        c.pivot.set(8, 16);
+        c.addChild(sprite, v.crown, v.bar);
+        this.monsterLayer.addChild(c);
         this.monsters.set(m.id, v);
         this.burst((r.x + 1 + i) * T + 8, (r.y + r.h - 2) * T + 8, 0xd8324a, 10, 0.8);
       }
+      v.species = m.species; // a later failure of the same check can change what it is
+      this.drawStatus(v, m);
       const x = (r.x + 1 + (i % Math.max(1, r.w - 2))) * T, y = (r.y + r.h - 2 - Math.floor(i / Math.max(1, r.w - 2))) * T;
       const sq = Math.abs(Math.sin(t / 180 + v.phase));
-      v.s.texture = this.art.slime[sq > 0.7 ? 1 : 0];
-      v.s.position.set(x + 16, y - Math.round(sq * 2));
+      v.s.texture = this.art.monsters[v.species][sq > 0.7 ? 1 : 0];
+      v.c.scale.set((lod === 'far' ? 3 : 1) * (isBoss(m) ? 2 : 1));
+      v.c.position.set(x + 8, y + 16 - Math.round(sq * 2));
+      v.c.alpha = v.flash > 0 && Math.floor(v.flash / 60) % 2 ? 0.3 : 1;
+      v.flash = Math.max(0, v.flash - dtMs);
     }
+  }
+
+  /** HP bar (once a monster has had more than one failure) and a crown for bosses; redrawn only when they change. */
+  private drawStatus(v: MonsterView, m: Monster) {
+    const key = `${m.species}/${m.hp}/${m.maxHp}/${isBoss(m)}`;
+    if (v.drawn === key) return;
+    v.drawn = key;
+    const head = HEAD[v.species];
+    v.crown.clear();
+    if (isBoss(m)) {
+      v.crown.rect(5, head - 3, 1, 1).rect(7, head - 3, 2, 1).rect(10, head - 3, 1, 1).rect(5, head - 2, 6, 2).fill(0xffd043);
+      v.crown.rect(7, head - 2, 2, 1).fill(0xd8324a);
+    }
+    v.bar.clear();
+    if (m.maxHp > 1) {
+      const top = head - (isBoss(m) ? 6 : 3);
+      v.bar.rect(1, top, 14, 2).fill({ color: 0x000000, alpha: 0.7 });
+      v.bar.rect(1, top, Math.max(1, Math.round((14 * m.hp) / m.maxHp)), 2).fill(0xff4d6d);
+    }
+  }
+
+  /** World position of the middle of a monster's body. */
+  private center(v: MonsterView): { x: number; y: number } {
+    return { x: v.c.x, y: v.c.y - 6 * v.c.scale.y };
   }
 
   /** After the map was regenerated: put every hero straight onto its new position. */
@@ -137,11 +181,11 @@ export class ActorLayer {
     }
   }
 
-  /** World position of the first slime spawned by `heroId`'s failing tests (for taunt bubbles). */
+  /** World position of the monster `heroId`'s failing checks spawned last (the one taunting, in bubbles). */
   monsterPos(s: GameState, heroId: HeroId): { x: number; y: number } | null {
-    const m = s.monsters.find((mo) => mo.hero === heroId);
+    const m = lastMonsterOf(s, heroId);
     const v = m && this.monsters.get(m.id);
-    return v ? { x: v.s.x - 8, y: v.s.y + 2 } : null;
+    return v ? { x: v.c.x, y: v.c.y - (20 - HEAD[v.species]) * v.c.scale.y } : null;
   }
 
   /** World positions of heroes and monsters, for the camera and the lights. */
@@ -160,7 +204,7 @@ export class ActorLayer {
       out.push({ x: v.px + 8, y: v.py + 10, r: base * (fuel < 0.25 ? 0.6 + fuel * 1.6 : 1), color: cls === 'wizard' ? 0x9b7bff : 0xff9a6a, intensity: 0.18 });
       if (cls === 'wizard') out.push({ x: v.px + 14, y: v.py + 2, r: 22, color: 0x8ce0ff, intensity: 0.4, flicker: 0.08 });
     }
-    for (const v of this.monsters.values()) out.push({ x: v.s.x - 8, y: v.s.y + 10, r: 26, color: 0xff2850, intensity: 0.42 });
+    for (const v of this.monsters.values()) out.push({ ...this.center(v), r: 26, color: 0xff2850, intensity: 0.42 });
     return out;
   }
 

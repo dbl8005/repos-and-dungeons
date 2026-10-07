@@ -5,6 +5,7 @@ import '@fontsource/inter/600.css';
 import '@fontsource/inter/800.css';
 import './hud/hud.css';
 import { Application, Container } from 'pixi.js';
+import { speciesFor, type Species } from '../shared/bestiary.js';
 import type { GameEvent, HeroClass, HeroId } from '../shared/events.js';
 import type { DungeonMap } from '../shared/map-types.js';
 import { initialState, reduce, remapState, type GameState } from '../shared/reducer.js';
@@ -36,12 +37,18 @@ const NAMES: Record<HeroClass, string> = { knight: 'Opus', squire: 'Sonnet', sco
 const BUBBLE_NAMES: Record<HeroClass, string> = { knight: 'OPUS', squire: 'SONNET', scout: 'HAIKU', wizard: 'FABLE', adventurer: 'ADVENTURER' };
 const DEFAULT_ZOOM = 3;
 
+const RUN_VERB: Record<string, string> = { typecheck: 'checked types', lint: 'ran the linter', build: 'ran the build' };
+const FOES: Record<Species, string> = { slime: 'monsters', goblin: 'goblins', bat: 'bats', ogre: 'an ogre' };
+
 function logLine(e: GameEvent, s: GameState): string | null {
   const who = NAMES[s.heroes[e.hero]?.heroClass ?? 'adventurer'];
   switch (e.kind) {
     case 'move': return `${who} read ${e.path}`;
     case 'forge': return `${who} ${e.created ? 'created' : 'forged'} ${e.path}`;
-    case 'test_result': return e.failed.length ? `${who} ran tests · ${e.failed.length} failing — monsters!` : `${who} ran tests · all passing`;
+    case 'test_result': {
+      const verb = RUN_VERB[e.runner] ?? 'ran tests';
+      return e.failed.length ? `${who} ${verb} · ${e.failed.length} failing · ${FOES[e.species ?? speciesFor(e.runner)]}!` : `${who} ${verb} · all passing`;
+    }
     case 'hero_joined': return `${who} joined the party`;
     case 'hero_left': return `A hero left the dungeon`;
     case 'compacted': return `${who}'s memory fades · the fog returns`;
@@ -129,10 +136,10 @@ async function main() {
   }
 
   /** Per batch: re-bake dirty tiles, track fights for the music, play sounds. */
-  function presentBatch(s: GameState, events: GameEvent[], monstersBefore: number, dirty: number[], nowT: number, fresh: (e: GameEvent) => boolean) {
+  function presentBatch(s: GameState, events: GameEvent[], monstersBefore: GameState['monsters'], dirty: number[], nowT: number, fresh: (e: GameEvent) => boolean) {
     chunks?.markDirty(dirty, s);
-    const monstersAfter = s.monsters.length;
-    if (monstersBefore > 0 && monstersAfter === 0) lastMonsterDiedAt = nowT;
+    const monstersAfter = s.monsters;
+    if (monstersBefore.length > 0 && monstersAfter.length === 0) lastMonsterDiedAt = nowT;
     if (audio.enabled) {
       const cues = planSounds(events.filter(fresh), { followed: followedNow, now: nowT, monstersBefore, monstersAfter });
       for (const cue of cues) if (cueLimiter.allow(cue, performance.now())) audio.play(cue);
@@ -142,7 +149,7 @@ async function main() {
   function apply(events: GameEvent[]) {
     if (!live) return;
     const dirty: number[] = [];
-    const monstersBefore = live.monsters.length;
+    const monstersBefore = live.monsters;
     for (const e of events) {
       history.push(e);
       const before = live.monsters;
@@ -231,7 +238,7 @@ async function main() {
       videoMs += dt;
       nowT = videoMs;
       const dirty: number[] = [];
-      const monstersBefore = s.monsters.length;
+      const monstersBefore = s.monsters;
       const res = tl.advance(videoMs, (e, st, before) => presentOne(st, e, before, dirty));
       tlClock = res.clockMs;
       if (res.fed.length) presentBatch(s, res.fed, monstersBefore, dirty, nowT, () => true);

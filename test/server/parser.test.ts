@@ -108,7 +108,7 @@ describe('createParser', () => {
   it('cast never leaks env assignments or full paths', () => {
     const p = make();
     for (const [i, cmd, want] of [
-      [1, 'API_KEY=sk-123 TOKEN=x npm run build', 'npm'],
+      [1, 'API_KEY=sk-123 TOKEN=x npm install', 'npm'],
       [2, '/Users/me/secret-dir/bin/tool --flag', 'tool'],
       [3, 'export GITHUB_TOKEN=ghp_abc', 'export'],
       [4, 'FOO=bar', ''],
@@ -125,6 +125,27 @@ describe('createParser', () => {
     const out = 'FAILED tests/test_x.py::test_a - boom\n==== 1 failed, 3 passed in 0.1s ====';
     const evs = p.feed(toolResult('t1', `Exit code 1\n${out}`, true, { stdout: out, stderr: '' }));
     expect(evs).toEqual([expect.objectContaining({ kind: 'test_result', runner: 'pytest', passed: 3, failed: [{ file: 'tests/test_x.py', name: 'test_a' }] })]);
+  });
+  it('build, typecheck and lint Bash yield test_result without leaking the command; file paths become repo-relative', () => {
+    const p = make();
+    p.feed(toolUse('b1', 'Bash', { command: 'API_KEY=sk-123 npm run build' }));
+    const out = "src/a.ts(3,1): error TS2304: Cannot find name 'foo'.";
+    const evs = p.feed(toolResult('b1', out, true, { stdout: out, stderr: '' }));
+    expect(evs).toEqual([expect.objectContaining({ kind: 'test_result', runner: 'build', species: 'goblin', failed: [{ file: 'src/a.ts', name: 'TS2304' }] })]);
+    expect(JSON.stringify(evs)).not.toMatch(/sk-123|Cannot find/);
+    p.feed(toolUse('l1', 'Bash', { command: 'npx eslint .' }));
+    const lint = '/repo/src/a.ts\n  1:1  error  bad  no-undef\n/elsewhere/x.ts\n  1:1  error  bad  no-undef\nC:\\Users\\me\\repo\\src\\a.ts\n  1:1  error  bad  no-undef\n';
+    const evs2 = p.feed(toolResult('l1', lint, true, { stdout: lint, stderr: '' }));
+    expect(evs2).toEqual([
+      expect.objectContaining({ kind: 'test_result', runner: 'lint', species: 'bat', failed: [{ file: 'src/a.ts', name: 'no-undef' }, { name: 'no-undef' }, { name: 'no-undef' }] }),
+    ]);
+    expect(JSON.stringify(evs2)).not.toMatch(/Users|elsewhere/);
+  });
+  it('ordinary Bash stays a cast even when its output mentions errors', () => {
+    const p = make();
+    p.feed(toolUse('o1', 'Bash', { command: 'cat build.log' }));
+    const out = "src/a.ts(3,1): error TS2304: Cannot find name 'foo'.";
+    expect(p.feed(toolResult('o1', out, true, { stdout: out, stderr: '' }))).toEqual([expect.objectContaining({ kind: 'cast', command: 'cat' })]);
   });
   it('usage becomes a torch event', () => {
     const p = make();
